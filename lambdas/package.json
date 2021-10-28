@@ -1,0 +1,15 @@
+{
+  "name": "project-crud-lamdas-with-dynamodb",
+  "version": "1.0.0",
+  "description": "lambda to do crud operations for project on DynamoDB",
+  "private": true,
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/uuid": "*"
+  },
+  "dependencies": {
+    "aws-sdk": "*",
+    "uuid": "*"
+  }
+}
