@@ -1,5 +1,7 @@
 import * as cdk from "@aws-cdk/core";
 import * as db from "@aws-cdk/aws-dynamodb";
+import * as s3 from "@aws-cdk/aws-s3";
+import * as iam from "@aws-cdk/aws-iam";
 import { Runtime } from "@aws-cdk/aws-lambda";
 import {
   LambdaIntegration,
@@ -170,6 +172,54 @@ export class ProjectManagementBackendStack extends cdk.Stack {
     );
     updateProject.addMethod("PUT", updateProjectIntegration);
     addCorsOptions(updateProject);
+
+    // S3 Bucket for storing snapshots
+    const photo_s3Bucket = new s3.Bucket(this, "photoBucket", {
+      bucketName: "project-management-photo-bucket",
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    //adding bucket policy for the bucket
+    photo_s3Bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal("lambda.amazonaws.com")],
+        actions: ["s3:Get*", "s3:Put*"],
+        resources: [`${photo_s3Bucket.bucketArn}/*`],
+      })
+    );
+
+    const uploadUrlNodejsFunctionProps: NodejsFunctionProps = {
+      bundling: {
+        minify: true,
+        externalModules: ["aws-sdk"],
+      },
+      depsLockFilePath: path1.join(dirname, "lambdas", "package-lock.json"),
+      handler: "photoUploadHandler",
+      environment: {
+        BUCKET_NAME: photo_s3Bucket.bucketName,
+      },
+      runtime: Runtime.NODEJS_14_X,
+    };
+
+    // s3 bucket presigned URL for upload the object
+    const s3UploadUrlLambda = new NodejsFunction(this, "uploadUrlFunction", {
+      entry: path1.join(dirname, "lambdas", "putUploadUrl.ts"),
+      ...uploadUrlNodejsFunctionProps,
+    });
+
+    const s3UploadUrlLambdaIntegration = new LambdaIntegration(
+      s3UploadUrlLambda
+    );
+
+    // s3 upload endpoint
+    const preSignedUrlEndpoint = api.root.resourceForPath(
+      "/projects/presignedurl"
+    );
+    preSignedUrlEndpoint.addMethod("PUT", s3UploadUrlLambdaIntegration);
+    addCorsOptions(preSignedUrlEndpoint);
+
+    photo_s3Bucket.grantReadWrite(s3UploadUrlLambda);
   }
 }
 
